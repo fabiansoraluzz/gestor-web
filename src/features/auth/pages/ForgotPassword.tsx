@@ -11,6 +11,9 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+// Si quieres forzar destino (opcional)
+const RESET_REDIRECT = import.meta.env.VITE_PASSWORD_RESET_REDIRECT as string | undefined;
+
 export default function ForgotPassword() {
   const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -19,7 +22,7 @@ export default function ForgotPassword() {
   });
 
   const mut = useMutation({
-    mutationFn: (v: FormData) => forgotPassword(v.email),
+    mutationFn: (v: FormData) => forgotPassword(v.email, RESET_REDIRECT),
     onMutate: () => toast.loading('Enviando enlace...', { id: 'forgot' }),
     onSuccess: () => {
       toast.success('Si el correo existe, se envió un enlace de restablecimiento.', { id: 'forgot' });
