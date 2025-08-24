@@ -17,7 +17,6 @@ import Admin from "../features/admin/pages/Admin";
 import Configuracion from "../features/settings/pages/Configuracion";
 import Ayuda from "../features/help/pages/Ayuda";
 import ResetPassword from "../features/auth/pages/ResetPassword";
-import PatternSetup from "../features/account/pages/PatternSetup";
 
 export const router = createBrowserRouter([
   // Rutas públicas (auth)
@@ -45,7 +44,6 @@ export const router = createBrowserRouter([
       { path: "admin", element: <Admin /> },
       { path: "configuracion", element: <Configuracion /> },
       { path: "ayuda", element: <Ayuda /> },
-      { path: "cuenta/patron", element: <PatternSetup /> },
     ],
   },
 

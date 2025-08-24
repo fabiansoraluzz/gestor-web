@@ -1,79 +1,75 @@
-import { NavLink, useNavigate } from "react-router-dom";
+// src/app/components/Sidebar.tsx
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, Boxes, LineChart, PlusSquare, Bell, Users,
-  Settings2, Cog, CircleHelp, LogOut, Package2
-} from "lucide-react";
+  Squares2X2Icon,   // Dashboard
+  UsersIcon,         // Clientes
+  BellIcon,          // Notificaciones
+  Cog6ToothIcon,     // Configuración
+  CubeIcon,          // Productos
+  ArrowRightOnRectangleIcon, // Salir
+} from "@heroicons/react/24/outline";
 import { cn } from "../../lib/ui";
-import { clearSession, getSession } from "../../lib/auth"; // ya lo tienes
+import { clearSession, getSession } from "../../lib/auth";
 
-const items = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/inventario", label: "Inventario", icon: Boxes },
-  { to: "/ventas", label: "Ventas", icon: LineChart },
-  { to: "/crear-producto", label: "Crear Producto", icon: PlusSquare },
-  { to: "/notificaciones", label: "Notificaciones", icon: Bell, badge: true },
-  { to: "/clientes", label: "Clientes", icon: Users },
-  { to: "/admin", label: "Administración", icon: Settings2 },
-  { to: "/configuracion", label: "Configuración", icon: Cog },
-  { to: "/ayuda", label: "Ayuda", icon: CircleHelp },
+type NavItem = {
+  to: string;
+  label: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+};
+
+const NAV: NavItem[] = [
+  { to: "/dashboard", label: "Dashboard", icon: Squares2X2Icon },
+  { to: "/clients", label: "Clientes", icon: UsersIcon },
+  { to: "/products", label: "Productos", icon: CubeIcon },
+  { to: "/notifications", label: "Notificaciones", icon: BellIcon },
+  { to: "/settings", label: "Configuración", icon: Cog6ToothIcon },
 ];
 
 export default function Sidebar() {
-  const nav = useNavigate();
-  const ses = getSession();
-
-  function logout() {
-    clearSession();
-    nav("/auth/login");
-  }
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const session = getSession();
 
   return (
-    <aside className="h-screen sticky top-0 border-r bg-white w-64 flex flex-col">
-      {/* Logo */}
-      <div className="h-16 flex items-center gap-3 px-4 border-b">
-        <div className="grid place-items-center h-9 w-9 rounded-xl bg-blue-600">
-          <Package2 className="size-5 text-white" />
-        </div>
-        <div className="leading-tight">
-          <p className="font-semibold">GESTOR</p>
-          <p className="text-xs text-slate-500">Panel</p>
+    <aside className="h-screen w-64 border-r bg-white/60 backdrop-blur-sm">
+      <div className="p-4 border-b">
+        <div className="font-semibold text-slate-800">Gestor</div>
+        <div className="text-xs text-slate-500 truncate">
+          {session?.email ?? "—"}
         </div>
       </div>
 
-      {/* Menú */}
-      <nav className="p-3 space-y-1 overflow-y-auto">
-        {items.map(({ to, label, icon: Icon, badge }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm",
-                "text-slate-600 hover:bg-slate-100",
-                isActive && "bg-blue-50 text-blue-700 font-medium"
-              )
-            }
-          >
-            <Icon className="size-4" />
-            <span>{label}</span>
-            {badge && (
-              <span className="absolute right-3 top-1.5 inline-block size-2 rounded-full bg-red-500" />
-            )}
-          </NavLink>
-        ))}
+      <nav className="p-3 space-y-1">
+        {NAV.map(({ to, label, icon: Icon }) => {
+          const active = pathname === to || pathname.startsWith(to + "/");
+          return (
+            <Link
+              key={to}
+              to={to}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
+                active
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              )}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* Pie: usuario + salir */}
-      <div className="mt-auto p-3 border-t">
-        <div className="px-3 pb-2 text-xs text-slate-500 truncate">
-          {ses?.email ?? "usuario@correo.com"}
-        </div>
+      <div className="mt-auto p-3">
         <button
-          onClick={logout}
-          className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
+          onClick={() => {
+            clearSession();
+            navigate("/auth/login");
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50"
         >
-          <LogOut className="size-4" />
-          Cerrar Sesión
+          <ArrowRightOnRectangleIcon className="h-5 w-5" aria-hidden="true" />
+          <span>Cerrar sesión</span>
         </button>
       </div>
     </aside>

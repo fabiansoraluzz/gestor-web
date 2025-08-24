@@ -1,227 +1,131 @@
-import { useState, useEffect } from "react";
+// src/features/auth/pages/Login.tsx
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import PatternPad from "../../../app/components/PatternPad";
 import { toast } from "sonner";
 
 import { saveSession } from "../../../lib/auth";
 import { useAuth } from "../useAuth";
-import { loginPassword, loginWithPattern } from "../api";
+import { login } from "../api";
 
-// --------- Schemas ---------
-const passwordSchema = z.object({
-  email: z.string().trim().min(1, "El correo es obligatorio.").email("Ingresa un correo válido."),
+const schema = z.object({
+  identifier: z.string().trim().min(3, "Ingresa tu usuario o correo."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
-  recordarme: z.boolean().default(true),
 });
-
-const patternSchema = z.object({
-  email: z.string().trim().min(1, "El correo es obligatorio.").email("Ingresa un correo válido."),
-  pattern: z.string().min(3, "Dibuja un patrón válido."),
-  recordarme: z.boolean().default(true),
-});
-
-// Tipos de INPUT/OUTPUT (opción A)
-type PasswordFormIn  = z.input<typeof passwordSchema>;   // recordarme?: boolean
-type PasswordFormOut = z.output<typeof passwordSchema>;  // recordarme:  boolean
-type PatternFormIn   = z.input<typeof patternSchema>;
-type PatternFormOut  = z.output<typeof patternSchema>;
-
-// util para serializar el patrón
-function serializePattern(points: number[]) {
-  return points.join("-");
-}
+type FormData = z.infer<typeof schema>;
 
 export default function Login() {
-  const [tab, setTab] = useState<"password" | "pattern">("password");
-  const { setToken } = useAuth();
+  const [showPass, setShowPass] = useState(false);
   const nav = useNavigate();
+  const { setToken } = useAuth();
 
-  // ----- Contraseña -----
-  const passForm = useForm<PasswordFormIn>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: { recordarme: true },
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+    resolver: zodResolver(schema),
     mode: "onChange",
   });
 
-  const mutPass = useMutation({
-    mutationFn: (v: PasswordFormIn) => loginPassword(v),
-    onMutate: () => toast.loading("Ingresando...", { id: "auth" }),
-    onSuccess: finishLogin,
-    onError: (e: any) =>
-      toast.error(e?.response?.data?.error ?? "No se pudo iniciar sesión", { id: "auth" }),
+  const mut = useMutation({
+    mutationFn: (v: FormData) => login(v),
   });
 
-  // ----- Patrón -----
-  const patForm = useForm<PatternFormIn>({
-    resolver: zodResolver(patternSchema),
-    defaultValues: { recordarme: true, email: "" },
-    mode: "onChange",
-  });
-
-  const [patternPoints, setPatternPoints] = useState<number[]>([]);
-
-  // 👇 este effect DEBE ir dentro del componente y después de declarar estados/form
-  useEffect(() => {
-    if (tab === "pattern") {
-      setPatternPoints([]);
-      patForm.setValue("pattern", "", { shouldValidate: true });
-    }
-  }, [tab, patForm]);
-
-  const mutPat = useMutation({
-    mutationFn: (v: PatternFormIn) => loginWithPattern(v),
-    onMutate: () => toast.loading("Verificando patrón...", { id: "auth" }),
-    onSuccess: finishLogin,
-    onError: (e: any) =>
-      toast.error(e?.response?.data?.error ?? "No se pudo iniciar sesión con patrón", { id: "auth" }),
-  });
-
-  function finishLogin(data: any) {
-    if (data.requiereConfirmacion || !data.accessToken) {
-      toast.info("Revisa tu correo para confirmar la cuenta.", { id: "auth" });
-      return;
-    }
-    const nombre = data.nombre ?? data.email?.split("@")[0] ?? "Usuario";
-
-    saveSession({
-      accessToken: data.accessToken,
-      tokenType: data.tokenType,
-      expiresIn: data.expiresIn,
-      usuarioId: data.usuarioId,
-      email: data.email,
+  const onSubmit = (v: FormData) =>
+    toast.promise(mut.mutateAsync(v), {
+      id: "auth", // evita duplicados
+      loading: "Ingresando...",
+      success: (data: any) => {
+        if (!data?.accessToken) return "No se pudo iniciar sesión";
+        saveSession({
+          accessToken: data.accessToken,
+          tokenType: data.tokenType,
+          expiresIn: data.expiresIn,
+          usuarioId: data.usuarioId,
+          email: data.email,
+        });
+        setToken(data.accessToken);
+        nav("/dashboard");
+        const nombre = data?.nombre ?? data?.username ?? data?.email?.split("@")[0] ?? "Usuario";
+        return `Bienvenido ${nombre}`;
+      },
+      error: (e: any) => e?.response?.data?.error ?? "Credenciales inválidas",
     });
-    setToken(data.accessToken);
-
-    toast.success(`Bienvenido ${nombre}`, { id: "auth" });
-    nav("/dashboard");
-  }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-slate-50">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow">
-        <h1 className="text-2xl font-semibold mb-6">Iniciar sesión</h1>
-
-        {/* Tabs */}
-        <div className="mb-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm">
-          <button
-            className={`py-2 rounded-md ${tab === "password" ? "bg-white shadow font-medium" : ""}`}
-            onClick={() => setTab("password")}
-            type="button"
-          >
-            Contraseña
-          </button>
-          <button
-            className={`py-2 rounded-md ${tab === "pattern" ? "bg-white shadow font-medium" : ""}`}
-            onClick={() => setTab("pattern")}
-            type="button"
-          >
-            Patrón
-          </button>
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 items-center gap-10 px-6 md:px-12 bg-slate-50">
+      {/* Lado ilustración (como tu captura) */}
+      <div className="hidden md:block">
+        <div className="w-full aspect-square max-w-[560px] bg-gradient-to-br from-blue-50 via-indigo-50 to-rose-50 rounded-xl shadow-inner mx-auto grid place-items-center">
+          <div className="w-3/4 aspect-square rounded-full bg-blue-500/90 shadow-2xl" />
         </div>
+      </div>
 
-        {tab === "password" ? (
-          <form onSubmit={passForm.handleSubmit((v) => mutPass.mutate(v))} className="space-y-3" noValidate>
+      {/* Card de Login */}
+      <div className="w-full max-w-xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl px-6 md:px-10 py-10">
+          <h1 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-8">
+            Bienvenido
+          </h1>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div>
-              <label className="block text-sm mb-1" htmlFor="email">Correo electrónico</label>
               <input
-                id="email"
-                {...passForm.register("email")}
-                className="w-full border rounded px-3 py-2"
-                placeholder="tu@correo.com"
-                inputMode="email"
-                autoComplete="email"
-                aria-invalid={!!passForm.formState.errors.email}
+                {...register("identifier")}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="Usuario o Email"
+                aria-invalid={!!errors.identifier}
               />
-              {passForm.formState.errors.email && (
-                <p className="text-red-600 text-sm">{passForm.formState.errors.email.message}</p>
+              {errors.identifier && (
+                <p className="text-red-600 text-sm mt-1">{errors.identifier.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm mb-1" htmlFor="password">Contraseña</label>
-              <input
-                id="password"
-                type="password"
-                {...passForm.register("password")}
-                className="w-full border rounded px-3 py-2"
-                placeholder="••••••••"
-                autoComplete="current-password"
-                aria-invalid={!!passForm.formState.errors.password}
-              />
-              {passForm.formState.errors.password && (
-                <p className="text-red-600 text-sm">{passForm.formState.errors.password.message}</p>
+              <div className="relative">
+                <input
+                  type={showPass ? "text" : "password"}
+                  {...register("password")}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 pr-24 outline-none focus:border-blue-500"
+                  placeholder="Password"
+                  aria-invalid={!!errors.password}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-600 hover:text-slate-900"
+                  tabIndex={-1}
+                >
+                  {showPass ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>
               )}
             </div>
-
-            <label className="inline-flex items-center gap-2 mt-2">
-              <input type="checkbox" {...passForm.register("recordarme")} />
-              <span>Mantener la sesión iniciada</span>
-            </label>
 
             <button
               type="submit"
-              disabled={mutPass.isPending}
-              className="mt-4 w-full rounded bg-blue-600 text-white py-2 hover:bg-blue-700 disabled:opacity-60"
+              disabled={mut.isPending}
+              className="w-full rounded-lg bg-blue-600 text-white py-3 font-medium hover:bg-blue-700 disabled:opacity-60 shadow-lg"
             >
-              {mutPass.isPending ? "Ingresando..." : "Iniciar sesión"}
+              {mut.isPending ? "Ingresando..." : "Iniciar sesión"}
             </button>
-          </form>
-        ) : (
-          <form onSubmit={patForm.handleSubmit((v) => mutPat.mutate(v))} className="space-y-4" noValidate>
-            <div>
-              <label className="block text-sm mb-1" htmlFor="patEmail">Correo electrónico</label>
-              <input
-                id="patEmail"
-                {...patForm.register("email")}
-                className="w-full border rounded px-3 py-2"
-                placeholder="tu@correo.com"
-                inputMode="email"
-                autoComplete="email"
-              />
-              {patForm.formState.errors.email && (
-                <p className="text-red-600 text-sm">{patForm.formState.errors.email.message}</p>
-              )}
+
+            <div className="text-center mt-2">
+              <Link to="/auth/forgot" className="text-rose-600 hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
             </div>
-
-            <div className="flex flex-col items-center gap-3">
-              <PatternPad
-                size={280}
-                path={patternPoints}
-                onChange={setPatternPoints}
-                onFinish={(pts) => {
-                  const serial = serializePattern(pts);
-                  patForm.setValue("pattern", serial, { shouldValidate: true });
-                }}
-              />
-              <input type="hidden" {...patForm.register("pattern")} />
-              {patForm.formState.errors.pattern && (
-                <p className="text-red-600 text-sm">{patForm.formState.errors.pattern.message}</p>
-              )}
-            </div>
-
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" {...patForm.register("recordarme")} />
-              <span>Mantener la sesión iniciada</span>
-            </label>
-
-            <button
-              type="submit"
-              disabled={mutPat.isPending}
-              className="w-full rounded bg-indigo-600 text-white py-2 hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {mutPat.isPending ? "Verificando..." : "Entrar con patrón"}
-            </button>
           </form>
-        )}
-
-        <div className="flex justify-between text-sm mt-6">
-          <Link to="/auth/forgot" className="text-blue-600 hover:underline">¿Olvidaste tu contraseña?</Link>
-          <Link to="/auth/register" className="text-blue-600 hover:underline">Crear cuenta</Link>
         </div>
+
+        <p className="text-center text-sm text-slate-600 mt-6">
+          ¿No tienes una cuenta?{" "}
+          <Link to="/auth/register" className="text-blue-600 hover:underline">
+            Regístrate aquí
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -1,33 +1,27 @@
 // src/features/auth/api.ts
 import api from "../../lib/api";
 
-// ---------- Tipos mínimos ----------
-export type LoginPasswordInput = { email: string; password: string; recordarme?: boolean };
-export type LoginPatternInput  = { email: string; pattern: string; recordarme?: boolean };
+// ---------- Tipos ----------
+export type LoginInput = {
+  identifier: string; // username o email
+  password: string;
+};
 
 export type RegisterInput = {
-  nombreCompleto: string;
-  email: string;
-  password: string;
-  pattern?: string;
+  username: string;         // requerido
+  email: string;            // requerido en FRONT/API (aunque DB lo tenga opcional)
+  password: string;         // requerido
+  nombres?: string | null;  // opcional
+  apellidos?: string | null;// opcional
 };
 
 export type ResetPasswordInput = {
-  accessToken: string;        // obtenido del querystring de Supabase (access_token)
+  accessToken: string; // token de Supabase en la URL (?access_token=xxx)
   password: string;
-  pattern?: string;
 };
 
-export type SetPatternInput = { pattern: string };
-
-// ---------- Llamadas ----------
-export async function loginPassword(payload: LoginPasswordInput) {
+export async function login(payload: LoginInput) {
   const { data } = await api.post("/api/auth/login", payload);
-  return data;
-}
-
-export async function loginWithPattern(payload: LoginPatternInput) {
-  const { data } = await api.post("/api/auth/pattern/login", payload);
   return data;
 }
 
@@ -39,7 +33,6 @@ export async function register(payload: RegisterInput) {
 export async function forgotPassword(email: string, redirectTo?: string) {
   const body = redirectTo ? { email, redirectTo } : { email };
   const { status } = await api.post("/api/auth/forgot-password", body);
-  // el backend devuelve 204
   return status === 204;
 }
 
@@ -48,13 +41,9 @@ export async function resetPassword(payload: ResetPasswordInput) {
   return data;
 }
 
-export async function setPattern(payload: SetPatternInput) {
-  await api.post("/api/auth/pattern/set", payload);
-}
-
 export async function me() {
   const { data } = await api.get("/api/auth/me");
-  return data as { usuarioId: string; email: string; nombre?: string };
+  return data as { usuarioId: string; email: string | null; username: string; nombre?: string };
 }
 
 export async function logout() {
