@@ -11,7 +11,6 @@ export default function AppProviders({ children }: { children: React.ReactNode }
     <QueryClientProvider client={qc}>
       <AuthProvider>
         {children}
-        {/* ÚNICO Toaster de toda la app */}
         <Toaster position="top-right" richColors closeButton />
       </AuthProvider>
     </QueryClientProvider>

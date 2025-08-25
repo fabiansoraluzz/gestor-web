@@ -1,8 +1,9 @@
+// src/features/auth/useAuth.ts
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { me as apiMe, logout as apiLogout } from "./api";
+import { me as apiMe, cerrarSesion as apiCerrarSesion } from "./api";
 import { getToken, clearSession } from "../../lib/auth";
 
-type User = { id: string; email: string; nombre?: string } | null;
+type User = { id: string; email: string | null; nombre?: string } | null;
 
 type AuthCtx = {
   user: User;
@@ -14,22 +15,18 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // token inicial desde tu storage real (accessToken)
   const [token, setTokenState] = useState<string | null>(() => getToken());
   const [user, setUser] = useState<User>(null);
 
-  // Sincroniza almacenamiento cuando seteas token manualmente desde la app
   const setToken = (t: string | null) => {
     setTokenState(t);
     if (!t) {
-      clearSession(); // borra accessToken, expiración y meta
+      clearSession();
     } else {
-      // No sobreescribimos expiración ni meta aquí: eso ya lo hace saveSession en Login.tsx
       localStorage.setItem("accessToken", t);
     }
   };
 
-  // Cuando el token cambie, intenta traer el usuario
   useEffect(() => {
     if (!token) {
       setUser(null);
@@ -37,13 +34,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     let cancel = false;
     apiMe()
-      .then((u) => {
+      .then((perfil) => {
         if (cancel) return;
-        setUser({ id: u.usuarioId, email: u.email, nombre: u.nombre });
+        const nombre = `${perfil.nombres ?? ""} ${perfil.apellidos ?? ""}`.trim() || undefined;
+        setUser({ id: perfil.id, email: perfil.correo, nombre });
       })
       .catch(() => {
         if (cancel) return;
-        // token inválido → limpiar
         clearSession();
         setTokenState(null);
         setUser(null);
@@ -55,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await apiLogout();
+      await apiCerrarSesion();
     } finally {
       clearSession();
       setTokenState(null);
@@ -63,10 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo<AuthCtx>(
-    () => ({ user, token, setToken, signOut }),
-    [user, token]
-  );
+  const value = useMemo<AuthCtx>(() => ({ user, token, setToken, signOut }), [user, token]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

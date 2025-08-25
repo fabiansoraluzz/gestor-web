@@ -6,14 +6,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { resetPassword } from "../api";
+import { restablecerContrasena } from "../api";
 
-// Icons (solid)
-import {
-  PuzzlePieceIcon,
-  LockClosedIcon,
-  ShieldCheckIcon,
-} from "@heroicons/react/24/solid";
+import { PuzzlePieceIcon, LockClosedIcon, ShieldCheckIcon } from "@heroicons/react/24/solid";
 
 /* =============== Validación =============== */
 const schema = z
@@ -25,12 +20,26 @@ const schema = z
     path: ["confirmar"],
     message: "Las contraseñas no coinciden.",
   });
-
 type FormData = z.infer<typeof schema>;
+
+/** Lee params desde ?query y/o #hash (Supabase suele usar hash). */
+function readToken(name: string): string | null {
+  const sp = new URLSearchParams(window.location.search);
+  const fromQuery = sp.get(name);
+  if (fromQuery) return fromQuery;
+
+  if (window.location.hash?.length > 1) {
+    const hp = new URLSearchParams(window.location.hash.substring(1));
+    const fromHash = hp.get(name);
+    if (fromHash) return fromHash;
+  }
+  return null;
+}
 
 export default function ResetPassword() {
   const [sp] = useSearchParams();
-  const accessToken = sp.get("access_token") ?? "";
+  const accessToken = readToken("access_token") ?? "";
+  const refreshToken = readToken("refresh_token") ?? "";
   const nav = useNavigate();
 
   // Pasos: 0 = Nueva contraseña, 1 = Confirmación
@@ -39,13 +48,7 @@ export default function ResetPassword() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState<number | null>(null);
 
-  const {
-    register,
-    trigger,
-    getValues,
-    formState: { errors },
-    reset,
-  } = useForm<FormData>({
+  const { register, trigger, getValues, formState: { errors }, reset } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: "onChange",
     defaultValues: { password: "", confirmar: "" },
@@ -53,14 +56,11 @@ export default function ResetPassword() {
 
   const mut = useMutation({
     mutationFn: async (v: FormData) =>
-      resetPassword({ accessToken, password: v.password }),
+      restablecerContrasena({ accessToken, refreshToken, password: v.password }),
   });
 
-  // Avanzar/volver pasos con validación por campo
   const goNext = async () => {
-    const ok =
-      (step === 0 && (await trigger("password"))) ||
-      (step === 1 && (await trigger("confirmar")));
+    const ok = (step === 0 && (await trigger("password"))) || (step === 1 && (await trigger("confirmar")));
     if (!ok) {
       toast.error("Revisa el campo antes de continuar.", { id: "reset" });
       return;
@@ -75,25 +75,22 @@ export default function ResetPassword() {
     }
   };
 
-  const goBack = () => step > 0 && setStep((s) => (s - 1) as any);
-
   const onSubmit = () =>
     toast.promise(
       (async () => {
-        const ok = await trigger(); // valida todo
+        const ok = await trigger();
         if (!ok) throw new Error("Revisa los campos antes de continuar.");
         const v = getValues();
         await mut.mutateAsync(v);
         reset();
         setStep(0);
-        // pequeña pausa para UX y redirección
         setTimeout(() => nav("/auth/login"), 300);
       })(),
       {
         id: "reset",
         loading: "Actualizando contraseña...",
         success: "Contraseña actualizada. ¡Ya puedes iniciar sesión!",
-        error: (e: any) => e?.response?.data?.error ?? e?.message ?? "No se pudo actualizar",
+        error: (e: any) => e?.message ?? e?.response?.data?.message ?? "No se pudo actualizar",
       }
     );
 
@@ -105,81 +102,37 @@ export default function ResetPassword() {
 
   const half = { x: board.w / 2, y: board.h / 2 };
   const corners = {
-    topLeft: {
-      x: -half.x + tile.w / 2 + margin.x,
-      y: -half.y + tile.h / 2 + margin.y,
-      rot: 8,
-    },
-    bottomRight: {
-      x: +half.x - tile.w / 2 - margin.x,
-      y: +half.y - tile.h / 2 - margin.y,
-      rot: -6,
-    },
+    topLeft: { x: -half.x + tile.w / 2 + margin.x, y: -half.y + tile.h / 2 + margin.y, rot: 8 },
+    bottomRight: { x: +half.x - tile.w / 2 - margin.x, y: +half.y - tile.h / 2 - margin.y, rot: -6 },
   } as const;
 
-  const homeByIndex: Record<number, keyof typeof corners> = {
-    0: "topLeft",
-    1: "bottomRight",
-  };
+  const homeByIndex: Record<number, keyof typeof corners> = { 0: "topLeft", 1: "bottomRight" };
 
   function tileTarget(i: number) {
-    if (i === step) {
-      return { x: 0, y: 0, rot: 0, z: 5, blur: 0, opacity: 1, scale: 1.02 };
-    }
+    if (i === step) return { x: 0, y: 0, rot: 0, z: 5, blur: 0, opacity: 1, scale: 1.02 };
     const home = corners[homeByIndex[i]];
     const isDone = i < step;
-    return {
-      x: home.x,
-      y: home.y,
-      rot: home.rot,
-      z: isDone ? 2 : 3,
-      blur: isDone ? 2.5 : 2,
-      opacity: isDone ? 0.75 : 0.9,
-      scale: isDone ? 0.95 : 0.96,
-    };
+    return { x: home.x, y: home.y, rot: home.rot, z: isDone ? 2 : 3, blur: isDone ? 2.5 : 2, opacity: isDone ? 0.75 : 0.9, scale: isDone ? 0.95 : 0.96 };
   }
 
   const tiles = useMemo(
     () => [
-      {
-        label: "Nueva contraseña",
-        color: "bg-indigo-50 border-indigo-100",
-        iconClass: "text-indigo-600",
-        Icon: LockClosedIcon,
-      },
-      {
-        label: "Confirmación",
-        color: "bg-blue-50 border-blue-100",
-        iconClass: "text-blue-600",
-        Icon: ShieldCheckIcon,
-      },
+      { label: "Nueva contraseña", color: "bg-indigo-50 border-indigo-100", iconClass: "text-indigo-600", Icon: LockClosedIcon },
+      { label: "Confirmación", color: "bg-blue-50 border-blue-100", iconClass: "text-blue-600", Icon: ShieldCheckIcon },
     ],
     []
   );
 
   const stepMeta = useMemo(() => {
-    if (step === 0) {
-      return {
-        icon: <LockClosedIcon className="w-10 h-10 text-indigo-600" />,
-        title: "Crea tu nueva contraseña",
-        field: "password" as const,
-        placeholder: "Nueva contraseña",
-      };
-    }
-    return {
-      icon: <ShieldCheckIcon className="w-10 h-10 text-blue-600" />,
-      title: "Confirma tu nueva contraseña",
-      field: "confirmar" as const,
-      placeholder: "Repite la contraseña",
-    };
+    if (step === 0) return { icon: <LockClosedIcon className="w-10 h-10 text-indigo-600" />, title: "Crea tu nueva contraseña", field: "password" as const, placeholder: "Nueva contraseña" };
+    return { icon: <ShieldCheckIcon className="w-10 h-10 text-blue-600" />, title: "Confirma tu nueva contraseña", field: "confirmar" as const, placeholder: "Repite la contraseña" };
   }, [step]);
 
-  // Si no hay token, advertir y bloquear acciones
-  const tokenMissing = !accessToken;
+  const tokenMissing = !accessToken || !refreshToken;
 
   useEffect(() => {
     if (tokenMissing) {
-      toast.error("Falta el access_token en la URL.", { id: "reset-token" });
+      toast.error("Faltan tokens de recuperación en la URL.", { id: "reset-token" });
     } else {
       toast.dismiss("reset-token");
     }
@@ -188,7 +141,7 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen grid place-items-center bg-slate-50 px-6 pb-6 md:pb-0">
       <div className="w-full max-w-6xl">
-        {/* ===== Encabezado ===== */}
+        {/* Encabezado */}
         <div className="text-center pt-8 pb-12">
           <PuzzlePieceIcon className="w-11 h-11 mx-auto mb-3 text-rose-500" />
           <h1 className="text-[1.5rem] md:text-5xl font-extrabold text-slate-900">
@@ -199,11 +152,10 @@ export default function ResetPassword() {
           </p>
         </div>
 
-        {/* ===== Cuerpo (2 columnas) ===== */}
+        {/* Cuerpo (2 columnas) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center justify-items-center">
-          {/* Columna izquierda: tablero con piezas — oculto en móvil */}
+          {/* Tablero izquierda */}
           <div className="relative hidden md:block" style={{ width: board.w, height: board.h }}>
-            {/* Ancla reubicada: 30% / 20% para consistencia */}
             <div className="absolute left-[30%] top-[20%] -translate-x-1/2 -translate-y-1/2">
               {tiles.map((t, i) => {
                 const TIcon = t.Icon;
@@ -213,8 +165,7 @@ export default function ResetPassword() {
                   filter: target.blur ? `blur(${target.blur}px)` : "none",
                   opacity: target.opacity,
                   zIndex: target.z,
-                  transition:
-                    "transform 450ms cubic-bezier(.2,.9,.2,1), filter 450ms, opacity 450ms",
+                  transition: "transform 450ms cubic-bezier(.2,.9,.2,1), filter 450ms, opacity 450ms",
                 };
 
                 const isDone = i < step;
@@ -231,23 +182,17 @@ export default function ResetPassword() {
                   >
                     <div className="grid gap-2 place-items-center">
                       <TIcon className={`w-8 h-8 ${t.iconClass}`} />
-                      <span
-                        className={`font-semibold ${
-                          i === step ? "text-slate-800" : "text-slate-500"
-                        }`}
-                      >
+                      <span className={`font-semibold ${i === step ? "text-slate-800" : "text-slate-500"}`}>
                         {t.label}
                       </span>
                     </div>
 
-                    {/* Badge de completado */}
                     {isDone && (
                       <span className="absolute -bottom-3 bg-emerald-500 text-white text-[10px] px-2.5 py-0.5 rounded-full shadow">
                         ✓ Completado
                       </span>
                     )}
 
-                    {/* Pop al desbloquear */}
                     {justUnlocked === i && (
                       <div className="absolute -right-2 -top-2 w-7 h-7 rounded-full bg-emerald-500 text-white grid place-items-center shadow-md animate-[pop_.5s_cubic-bezier(.2,.9,.2,1)]">
                         ✓
@@ -259,7 +204,7 @@ export default function ResetPassword() {
             </div>
           </div>
 
-          {/* Columna derecha: Card */}
+          {/* Card derecha */}
           <div className="w-full max-w-xl">
             <div className="bg-white rounded-2xl shadow-xl px-6 md:px-10 py-8 md:py-10 border border-slate-100">
               <div className="mb-3">{stepMeta.icon}</div>
@@ -270,10 +215,9 @@ export default function ResetPassword() {
                 Asegúrate de recordarla para tus próximos ingresos.
               </p>
 
-              {/* Advertencia si falta token */}
               {tokenMissing && (
                 <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-4">
-                  Falta el <code>access_token</code> en la URL.
+                  Faltan <code>access_token</code> y/o <code>refresh_token</code> en la URL.
                 </p>
               )}
 
@@ -297,9 +241,7 @@ export default function ResetPassword() {
                       {showPass ? "Ocultar" : "Mostrar"}
                     </button>
                   </div>
-                  {errors.password && (
-                    <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>
-                  )}
+                  {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>}
                 </div>
               )}
 
@@ -323,13 +265,10 @@ export default function ResetPassword() {
                       {showConfirm ? "Ocultar" : "Mostrar"}
                     </button>
                   </div>
-                  {errors.confirmar && (
-                    <p className="text-red-600 text-sm mt-1">{errors.confirmar.message}</p>
-                  )}
+                  {errors.confirmar && <p className="text-red-600 text-sm mt-1">{errors.confirmar.message}</p>}
                 </div>
               )}
 
-              {/* Botonera */}
               <div className="mt-6 flex items-center gap-3">
                 <Link
                   to="/auth/login"
@@ -360,7 +299,6 @@ export default function ResetPassword() {
               </div>
             </div>
 
-            {/* link inferior */}
             <p className="text-center text-sm text-slate-600 mt-6">
               ¿Recordaste tu contraseña?{" "}
               <Link to="/auth/login" className="text-blue-600 hover:underline">
@@ -371,7 +309,6 @@ export default function ResetPassword() {
         </div>
       </div>
 
-      {/* keyframes pequeños */}
       <style>{`
         @keyframes pop { 0%{transform:scale(.92)}60%{transform:scale(1.08)}100%{transform:scale(1)} }
       `}</style>

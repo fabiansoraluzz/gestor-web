@@ -9,7 +9,8 @@ import { toast } from "sonner";
 
 import { saveSession } from "../../../lib/auth";
 import { useAuth } from "../useAuth";
-import { login } from "../api";
+import { iniciarSesion } from "../api";
+import { ApiError } from "../../../lib/http";
 
 const schema = z.object({
   identifier: z.string().trim().min(3, "Ingresa tu usuario o correo."),
@@ -28,33 +29,57 @@ export default function Login() {
   });
 
   const mut = useMutation({
-    mutationFn: (v: FormData) => login(v),
+    mutationFn: async (v: FormData) => {
+      const isEmail = v.identifier.includes("@");
+      const payload = isEmail
+        ? { email: v.identifier, password: v.password }
+        : { username: v.identifier, password: v.password };
+      return iniciarSesion(payload);
+    },
   });
 
   const onSubmit = (v: FormData) =>
     toast.promise(mut.mutateAsync(v), {
       id: "auth", // evita duplicados
       loading: "Ingresando...",
-      success: (data: any) => {
-        if (!data?.accessToken) return "No se pudo iniciar sesión";
+      success: (session) => {
+        if (!session?.accessToken) return "No se pudo iniciar sesión";
+
         saveSession({
-          accessToken: data.accessToken,
-          tokenType: data.tokenType,
-          expiresIn: data.expiresIn,
-          usuarioId: data.usuarioId,
-          email: data.email,
+          accessToken: session.accessToken!,
+          tokenType: session.tokenType ?? undefined,
+          expiresIn: session.expiresIn ?? undefined,
+          usuarioId: session.usuarioId ?? undefined,
+          email: session.email ?? undefined,
         });
-        setToken(data.accessToken);
+        setToken(session.accessToken!);
         nav("/dashboard");
-        const nombre = data?.nombre ?? data?.username ?? data?.email?.split("@")[0] ?? "Usuario";
+
+        const nombre =
+          session?.nombre ??
+          session?.usuario ??
+          session?.email?.split?.("@")?.[0] ??
+          "Usuario";
         return `Bienvenido ${nombre}`;
       },
-      error: (e: any) => e?.response?.data?.error ?? "Credenciales inválidas",
+      error: (e: any) => {
+        // Mostrar exactamente el mensaje que viene del backend (ApiEnvelope)
+        if (e instanceof ApiError) {
+          // e.message ya contiene el message del servicio
+          return e.message || "No se pudo iniciar sesión";
+        }
+        // Si el backend no pasó por ApiError (caso raro), intentamos extraer su mensaje
+        const msg =
+          e?.response?.data?.message ??
+          e?.message ??
+          "No se pudo iniciar sesión";
+        return msg;
+      },
     });
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 items-center gap-10 px-6 md:px-12 bg-slate-50">
-      {/* Lado ilustración (como tu captura) */}
+      {/* Lado ilustración */}
       <div className="hidden md:block">
         <div className="w-full aspect-square max-w-[560px] bg-gradient-to-br from-blue-50 via-indigo-50 to-rose-50 rounded-xl shadow-inner mx-auto grid place-items-center">
           <div className="w-3/4 aspect-square rounded-full bg-blue-500/90 shadow-2xl" />

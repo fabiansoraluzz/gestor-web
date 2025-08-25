@@ -1,51 +1,99 @@
 // src/features/auth/api.ts
 import api from "../../lib/api";
+import type { ApiEnvelope } from "../../lib/http";
+import { assertOk, first } from "../../lib/http";
 
 // ---------- Tipos ----------
-export type LoginInput = {
-  identifier: string; // username o email
-  password: string;
-};
+export type LoginInput =
+  | { email: string; password: string; remember?: boolean }
+  | { username: string; password: string; remember?: boolean };
 
 export type RegisterInput = {
-  username: string;         // requerido
-  email: string;            // requerido en FRONT/API (aunque DB lo tenga opcional)
-  password: string;         // requerido
-  nombres?: string | null;  // opcional
-  apellidos?: string | null;// opcional
+  username: string;
+  email: string;
+  password: string;
+  nombres?: string | null;
+  apellidos?: string | null;
 };
 
 export type ResetPasswordInput = {
-  accessToken: string; // token de Supabase en la URL (?access_token=xxx)
+  accessToken: string;
+  refreshToken: string; // Importante en Supabase v2
   password: string;
 };
 
-export async function login(payload: LoginInput) {
-  const { data } = await api.post("/api/auth/login", payload);
-  return data;
+export type SessionPayload = {
+  usuarioId: string;
+  email: string | null;
+  usuario?: string;
+  nombre?: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  expiresIn: number | null;
+  tokenType: string | null;
+  remember?: boolean;
+};
+
+export type Perfil = {
+  id: string;
+  auth_usuario_id: string;
+  usuario: string;
+  correo: string;
+  nombres: string | null;
+  apellidos: string | null;
+  avatar_url: string | null;
+  activo: boolean;
+  creado_en: string;
+  actualizado_en: string;
+  roles: string[];
+};
+
+// ---------- Wrappers ----------
+export async function iniciarSesion(payload: LoginInput) {
+  const { data, status } = await api.post<ApiEnvelope<SessionPayload>>(
+    "/api/auth/iniciarSesion",
+    payload
+  );
+  const arr = assertOk(data, status);
+  return first(arr)!; // payload de sesión
 }
 
-export async function register(payload: RegisterInput) {
-  const { data } = await api.post("/api/auth/register", payload);
-  return data;
+export async function registrarUsuario(payload: RegisterInput) {
+  const { data, status } = await api.post<ApiEnvelope<SessionPayload>>(
+    "/api/auth/registrarUsuario",
+    payload
+  );
+  const arr = assertOk(data, status);
+  return first(arr)!;
 }
 
-export async function forgotPassword(email: string, redirectTo?: string) {
+export async function olvideContrasena(email: string, redirectTo?: string) {
   const body = redirectTo ? { email, redirectTo } : { email };
-  const { status } = await api.post("/api/auth/forgot-password", body);
-  return status === 204;
+  const { data, status } = await api.post<ApiEnvelope<unknown>>(
+    "/api/auth/olvideContrasena",
+    body
+  );
+  assertOk(data, status);
+  return true;
 }
 
-export async function resetPassword(payload: ResetPasswordInput) {
-  const { data } = await api.post("/api/auth/reset-password", payload);
-  return data;
+export async function restablecerContrasena(payload: ResetPasswordInput) {
+  const { data, status } = await api.post<ApiEnvelope<{ userId: string }>>(
+    "/api/auth/restablecerContrasena",
+    payload
+  );
+  const arr = assertOk(data, status);
+  return first(arr)!; // { userId }
 }
 
 export async function me() {
-  const { data } = await api.get("/api/auth/me");
-  return data as { usuarioId: string; email: string | null; username: string; nombre?: string };
+  const { data, status } = await api.get<ApiEnvelope<Perfil>>("/api/auth/me");
+  const arr = assertOk(data, status);
+  return first(arr)!; // Perfil
 }
 
-export async function logout() {
-  await api.post("/api/auth/logout");
+export async function cerrarSesion() {
+  const { data, status } = await api.post<ApiEnvelope<unknown>>("/api/auth/cerrarSesion");
+  assertOk(data, status);
+  return true;
 }

@@ -6,6 +6,7 @@ import RequireAuth from "./RequireAuth.tsx";
 import Login from "../features/auth/pages/Login";
 import Register from "../features/auth/pages/Register";
 import ForgotPassword from "../features/auth/pages/ForgotPassword";
+import ResetPassword from "../features/auth/pages/ResetPassword";
 
 import Dashboard from "../features/dashboard/pages/Dashboard";
 import Inventario from "../features/inventory/pages/Inventario";
@@ -16,16 +17,13 @@ import Clientes from "../features/clients/pages/Clientes";
 import Admin from "../features/admin/pages/Admin";
 import Configuracion from "../features/settings/pages/Configuracion";
 import Ayuda from "../features/help/pages/Ayuda";
-import ResetPassword from "../features/auth/pages/ResetPassword";
 
 export const router = createBrowserRouter([
-  // Rutas públicas (auth)
   { path: "/auth/login", element: <Login /> },
   { path: "/auth/register", element: <Register /> },
   { path: "/auth/forgot", element: <ForgotPassword /> },
-  { path: "/auth/reset", element: <ResetPassword /> }, 
+  { path: "/auth/reset", element: <ResetPassword /> },
 
-  // App protegida
   {
     path: "/",
     element: (
@@ -47,6 +45,5 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // 404 básico
   { path: "*", element: <Navigate to="/dashboard" replace /> },
 ]);
