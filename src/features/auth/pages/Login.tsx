@@ -2,19 +2,20 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
 import { saveSession } from "../../../lib/auth";
-import { useAuth } from "../useAuth";
+import { useAuth, __authInternals } from "../useAuth";
 import { iniciarSesion } from "../api";
 import { ApiError } from "../../../lib/http";
 
 const schema = z.object({
   identifier: z.string().trim().min(3, "Ingresa tu usuario o correo."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  remember: z.boolean(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -23,35 +24,49 @@ export default function Login() {
   const nav = useNavigate();
   const { setToken } = useAuth();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: "onChange",
+    defaultValues: { remember: true },
   });
 
   const mut = useMutation({
     mutationFn: async (v: FormData) => {
       const isEmail = v.identifier.includes("@");
       const payload = isEmail
-        ? { email: v.identifier, password: v.password }
-        : { username: v.identifier, password: v.password };
+        ? { email: v.identifier, password: v.password, remember: v.remember }
+        : { username: v.identifier, password: v.password, remember: v.remember };
       return iniciarSesion(payload);
     },
   });
 
-  const onSubmit = (v: FormData) =>
+  const onSubmit: SubmitHandler<FormData> = (v) => {
     toast.promise(mut.mutateAsync(v), {
-      id: "auth", // evita duplicados
+      id: "auth",
       loading: "Ingresando...",
       success: (session) => {
         if (!session?.accessToken) return "No se pudo iniciar sesión";
 
-        saveSession({
-          accessToken: session.accessToken!,
-          tokenType: session.tokenType ?? undefined,
-          expiresIn: session.expiresIn ?? undefined,
-          usuarioId: session.usuarioId ?? undefined,
-          email: session.email ?? undefined,
-        });
+        // Guardar en el storage correcto según remember
+        saveSession(
+          {
+            accessToken: session.accessToken!,
+            tokenType: session.tokenType ?? undefined,
+            expiresIn: session.expiresIn ?? undefined,
+            usuarioId: session.usuarioId ?? undefined,
+            email: session.email ?? undefined,
+          },
+          v.remember
+        );
+
+        // Persistimos la preferencia para rehidratación futura
+        __authInternals.setRememberFlag(!!v.remember);
+
         setToken(session.accessToken!);
         nav("/dashboard");
 
@@ -63,12 +78,9 @@ export default function Login() {
         return `Bienvenido ${nombre}`;
       },
       error: (e: any) => {
-        // Mostrar exactamente el mensaje que viene del backend (ApiEnvelope)
         if (e instanceof ApiError) {
-          // e.message ya contiene el message del servicio
           return e.message || "No se pudo iniciar sesión";
         }
-        // Si el backend no pasó por ApiError (caso raro), intentamos extraer su mensaje
         const msg =
           e?.response?.data?.message ??
           e?.message ??
@@ -76,6 +88,9 @@ export default function Login() {
         return msg;
       },
     });
+  };
+
+  const rememberChecked = watch("remember");
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 items-center gap-10 px-6 md:px-12 bg-slate-50">
@@ -129,6 +144,38 @@ export default function Login() {
               )}
             </div>
 
+            {/* Mantener sesión activa */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+                {/* input accesible (oculto) controlado por RHF */}
+                <input type="checkbox" {...register("remember")} className="sr-only" />
+
+                {/* círculo minimalista que reacciona al estado */}
+                <span
+                  className={[
+                    "relative grid place-items-center h-5 w-5 rounded-full bg-white transition-shadow",
+                    rememberChecked
+                      ? "border border-blue-600 shadow-[0_0_0_6px_rgba(37,99,235,.12)]"
+                      : "border border-slate-300 hover:shadow-sm",
+                  ].join(" ")}
+                  aria-hidden="true"
+                >
+                  <span
+                    className={[
+                      "h-2.5 w-2.5 rounded-full bg-blue-600 transition-transform",
+                      rememberChecked ? "scale-100" : "scale-0",
+                    ].join(" ")}
+                  />
+                </span>
+
+                <span className="text-sm text-slate-700">Mantener sesión activa</span>
+              </label>
+
+              <Link to="/auth/forgot" className="text-sm text-rose-600 hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={mut.isPending}
@@ -136,12 +183,6 @@ export default function Login() {
             >
               {mut.isPending ? "Ingresando..." : "Iniciar sesión"}
             </button>
-
-            <div className="text-center mt-2">
-              <Link to="/auth/forgot" className="text-rose-600 hover:underline">
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
           </form>
         </div>
 

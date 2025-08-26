@@ -97,3 +97,11 @@ export async function cerrarSesion() {
   assertOk(data, status);
   return true;
 }
+
+export async function rehidratarSesion() {
+  // Endpoint GET que devuelve una sesión nueva usando el refresh cookie HttpOnly.
+  // Debe responder con ApiEnvelope<SessionPayload>
+  const { data, status } = await api.get<ApiEnvelope<SessionPayload>>("/api/auth/iniciarSesion");
+  const arr = assertOk(data, status);
+  return first(arr) ?? null; // SessionPayload | null
+}

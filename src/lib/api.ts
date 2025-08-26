@@ -4,6 +4,7 @@ import { getToken, clearSession } from "./auth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
+  withCredentials: true,            // ✅ importante para enviar el refresh cookie (sb-refresh)
 });
 
 // (Opcional) bypass de Vercel para preview
@@ -28,8 +29,7 @@ api.interceptors.response.use(
   (err) => {
     if (err?.response?.status === 401) {
       clearSession();
-      // Aquí podrías redirigir al login si usas router
-      // window.location.href = "/login";
+      // window.location.href = "/auth/login";
     }
     return Promise.reject(err);
   }
