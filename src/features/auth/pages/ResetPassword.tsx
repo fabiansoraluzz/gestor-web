@@ -1,19 +1,26 @@
 // src/features/auth/pages/ResetPassword.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { restablecerContrasena } from "../api";
+import { ApiError } from "../../../lib/http";
 
-import { PuzzlePieceIcon, LockClosedIcon, ShieldCheckIcon } from "@heroicons/react/24/solid";
+import {
+  PuzzlePieceIcon,
+  LockClosedIcon,
+  ShieldCheckIcon,
+} from "@heroicons/react/24/solid";
 
 /* =============== Validación =============== */
 const schema = z
   .object({
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+    password: z
+      .string()
+      .min(6, "La contraseña debe tener al menos 6 caracteres."),
     confirmar: z.string().min(6, "Confirma tu contraseña."),
   })
   .refine((v) => v.password === v.confirmar, {
@@ -37,7 +44,6 @@ function readToken(name: string): string | null {
 }
 
 export default function ResetPassword() {
-  const [sp] = useSearchParams();
   const accessToken = readToken("access_token") ?? "";
   const refreshToken = readToken("refresh_token") ?? "";
   const nav = useNavigate();
@@ -48,7 +54,13 @@ export default function ResetPassword() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState<number | null>(null);
 
-  const { register, trigger, getValues, formState: { errors }, reset } = useForm<FormData>({
+  const {
+    register,
+    trigger,
+    getValues,
+    formState: { errors },
+    reset,
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: "onChange",
     defaultValues: { password: "", confirmar: "" },
@@ -56,13 +68,23 @@ export default function ResetPassword() {
 
   const mut = useMutation({
     mutationFn: async (v: FormData) =>
-      restablecerContrasena({ accessToken, refreshToken, password: v.password }),
+      restablecerContrasena({
+        accessToken,
+        refreshToken,
+        password: v.password,
+      }),
   });
 
   const goNext = async () => {
-    const ok = (step === 0 && (await trigger("password"))) || (step === 1 && (await trigger("confirmar")));
+    const ok =
+      (step === 0 && (await trigger("password"))) ||
+      (step === 1 && (await trigger("confirmar")));
     if (!ok) {
-      toast.error("Revisa el campo antes de continuar.", { id: "reset" });
+      const msg =
+        (step === 0 && errors.password?.message) ||
+        (step === 1 && errors.confirmar?.message) ||
+        "Revisa el campo.";
+      toast.error(msg, { id: "reset" });
       return;
     }
     setJustUnlocked(step);
@@ -90,10 +112,23 @@ export default function ResetPassword() {
         id: "reset",
         loading: "Actualizando contraseña...",
         success: "Contraseña actualizada. ¡Ya puedes iniciar sesión!",
-        error: (e: any) => e?.message ?? e?.response?.data?.message ?? "No se pudo actualizar",
+        error: (e: any) => {
+          if (e instanceof ApiError) return e.message;
+          return (
+            e?.response?.data?.message ??
+            e?.message ??
+            "No se pudo actualizar"
+          );
+        },
       }
     );
 
+  const goBackStep = () => {
+    if (step === 1) {
+      setStep(0);            // vuelve a la primera pieza
+      setShowConfirm(false); // opcional: ocultar estado visual del 2° input
+    }
+  };
   /* =============== Tablero (2 piezas) =============== */
 
   const board = { w: 420, h: 420 };
@@ -102,37 +137,82 @@ export default function ResetPassword() {
 
   const half = { x: board.w / 2, y: board.h / 2 };
   const corners = {
-    topLeft: { x: -half.x + tile.w / 2 + margin.x, y: -half.y + tile.h / 2 + margin.y, rot: 8 },
-    bottomRight: { x: +half.x - tile.w / 2 - margin.x, y: +half.y - tile.h / 2 - margin.y, rot: -6 },
+    topLeft: {
+      x: -half.x + tile.w / 2 + margin.x,
+      y: -half.y + tile.h / 2 + margin.y,
+      rot: 8,
+    },
+    bottomRight: {
+      x: +half.x - tile.w / 2 - margin.x,
+      y: +half.y - tile.h / 2 - margin.y,
+      rot: -6,
+    },
   } as const;
 
-  const homeByIndex: Record<number, keyof typeof corners> = { 0: "topLeft", 1: "bottomRight" };
+  const homeByIndex: Record<number, keyof typeof corners> = {
+    0: "topLeft",
+    1: "bottomRight",
+  };
 
   function tileTarget(i: number) {
-    if (i === step) return { x: 0, y: 0, rot: 0, z: 5, blur: 0, opacity: 1, scale: 1.02 };
+    if (i === step) {
+      return { x: 0, y: 0, rot: 0, z: 5, blur: 0, opacity: 1, scale: 1.02 };
+    }
     const home = corners[homeByIndex[i]];
     const isDone = i < step;
-    return { x: home.x, y: home.y, rot: home.rot, z: isDone ? 2 : 3, blur: isDone ? 2.5 : 2, opacity: isDone ? 0.75 : 0.9, scale: isDone ? 0.95 : 0.96 };
+    return {
+      x: home.x,
+      y: home.y,
+      rot: home.rot,
+      z: isDone ? 2 : 3,
+      blur: isDone ? 2.5 : 2,
+      opacity: isDone ? 0.75 : 0.9,
+      scale: isDone ? 0.95 : 0.96,
+    };
   }
 
   const tiles = useMemo(
     () => [
-      { label: "Nueva contraseña", color: "bg-indigo-50 border-indigo-100", iconClass: "text-indigo-600", Icon: LockClosedIcon },
-      { label: "Confirmación", color: "bg-blue-50 border-blue-100", iconClass: "text-blue-600", Icon: ShieldCheckIcon },
+      {
+        label: "Nueva contraseña",
+        color: "bg-indigo-50 border-indigo-100",
+        iconClass: "text-indigo-600",
+        Icon: LockClosedIcon,
+      },
+      {
+        label: "Confirmación",
+        color: "bg-blue-50 border-blue-100",
+        iconClass: "text-blue-600",
+        Icon: ShieldCheckIcon,
+      },
     ],
     []
   );
 
   const stepMeta = useMemo(() => {
-    if (step === 0) return { icon: <LockClosedIcon className="w-10 h-10 text-indigo-600" />, title: "Crea tu nueva contraseña", field: "password" as const, placeholder: "Nueva contraseña" };
-    return { icon: <ShieldCheckIcon className="w-10 h-10 text-blue-600" />, title: "Confirma tu nueva contraseña", field: "confirmar" as const, placeholder: "Repite la contraseña" };
+    if (step === 0) {
+      return {
+        icon: <LockClosedIcon className="w-10 h-10 text-indigo-600" />,
+        title: "Crea tu nueva contraseña",
+        field: "password" as const,
+        placeholder: "Nueva contraseña",
+      };
+    }
+    return {
+      icon: <ShieldCheckIcon className="w-10 h-10 text-blue-600" />,
+      title: "Confirma tu nueva contraseña",
+      field: "confirmar" as const,
+      placeholder: "Repite la contraseña",
+    };
   }, [step]);
 
   const tokenMissing = !accessToken || !refreshToken;
 
   useEffect(() => {
     if (tokenMissing) {
-      toast.error("Faltan tokens de recuperación en la URL.", { id: "reset-token" });
+      toast.error("Faltan tokens de recuperación en la URL.", {
+        id: "reset-token",
+      });
     } else {
       toast.dismiss("reset-token");
     }
@@ -148,14 +228,18 @@ export default function ResetPassword() {
             Restablece tu acceso
           </h1>
           <p className="text-slate-600 mt-2">
-            Define una nueva contraseña para tu cuenta y vuelve a ingresar con seguridad.
+            Define una nueva contraseña para tu cuenta y vuelve a ingresar con
+            seguridad.
           </p>
         </div>
 
         {/* Cuerpo (2 columnas) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-10 items-center justify-items-center">
           {/* Tablero izquierda */}
-          <div className="relative hidden md:block" style={{ width: board.w, height: board.h }}>
+          <div
+            className="relative hidden md:block"
+            style={{ width: board.w, height: board.h }}
+          >
             <div className="absolute left-[30%] top-[20%] -translate-x-1/2 -translate-y-1/2">
               {tiles.map((t, i) => {
                 const TIcon = t.Icon;
@@ -165,7 +249,8 @@ export default function ResetPassword() {
                   filter: target.blur ? `blur(${target.blur}px)` : "none",
                   opacity: target.opacity,
                   zIndex: target.z,
-                  transition: "transform 450ms cubic-bezier(.2,.9,.2,1), filter 450ms, opacity 450ms",
+                  transition:
+                    "transform 450ms cubic-bezier(.2,.9,.2,1), filter 450ms, opacity 450ms",
                 };
 
                 const isDone = i < step;
@@ -182,7 +267,11 @@ export default function ResetPassword() {
                   >
                     <div className="grid gap-2 place-items-center">
                       <TIcon className={`w-8 h-8 ${t.iconClass}`} />
-                      <span className={`font-semibold ${i === step ? "text-slate-800" : "text-slate-500"}`}>
+                      <span
+                        className={`font-semibold ${
+                          i === step ? "text-slate-800" : "text-slate-500"
+                        }`}
+                      >
                         {t.label}
                       </span>
                     </div>
@@ -217,7 +306,8 @@ export default function ResetPassword() {
 
               {tokenMissing && (
                 <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-4">
-                  Faltan <code>access_token</code> y/o <code>refresh_token</code> en la URL.
+                  Faltan <code>access_token</code> y/o{" "}
+                  <code>refresh_token</code> en la URL.
                 </p>
               )}
 
@@ -241,7 +331,11 @@ export default function ResetPassword() {
                       {showPass ? "Ocultar" : "Mostrar"}
                     </button>
                   </div>
-                  {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password.message}</p>}
+                  {errors.password && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.password.message}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -265,17 +359,27 @@ export default function ResetPassword() {
                       {showConfirm ? "Ocultar" : "Mostrar"}
                     </button>
                   </div>
-                  {errors.confirmar && <p className="text-red-600 text-sm mt-1">{errors.confirmar.message}</p>}
+                  {errors.confirmar && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {errors.confirmar.message}
+                    </p>
+                  )}
                 </div>
               )}
 
               <div className="mt-6 flex items-center gap-3">
-                <Link
-                  to="/auth/login"
-                  className="flex-1 text-center rounded-lg border border-slate-300 text-slate-700 py-3 font-medium hover:bg-slate-50"
+                {/* ← Volver: deshabilitado en el primer paso */}
+                <button
+                  type="button"
+                  onClick={goBackStep}
+                  disabled={step === 0}
+                  aria-disabled={step === 0}
+                  className="flex-1 text-center rounded-lg border border-slate-300 text-slate-700 py-3 font-medium hover:bg-slate-50
+                            disabled:opacity-60 disabled:cursor-not-allowed"
+                  title={step === 0 ? "Avanza al siguiente paso para habilitar" : "Volver al paso anterior"}
                 >
                   ← Volver
-                </Link>
+                </button>
 
                 {step < 1 ? (
                   <button

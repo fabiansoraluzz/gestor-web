@@ -7,20 +7,33 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { olvideContrasena } from "../api";
+import { ApiError } from "../../../lib/http";
 
 import { PuzzlePieceIcon, EnvelopeIcon } from "@heroicons/react/24/solid";
 
 const schema = z.object({
-  email: z.string().trim().min(1, "El correo es obligatorio.").email("Ingresa un correo válido."),
+  email: z
+    .string()
+    .trim()
+    .min(1, "El correo es obligatorio.")
+    .email("Ingresa un correo válido."),
 });
 type FormData = z.infer<typeof schema>;
 
-const RESET_REDIRECT = import.meta.env.VITE_PASSWORD_RESET_REDIRECT as string | undefined;
+const RESET_REDIRECT =
+  (import.meta.env.VITE_PASSWORD_RESET_REDIRECT as string | undefined) ?? undefined;
 
 export default function ForgotPassword() {
   const [showMark, setShowMark] = useState(false);
 
-  const { register, handleSubmit, trigger, formState: { errors }, getValues, reset } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    formState: { errors },
+    getValues,
+    reset,
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     mode: "onChange",
     defaultValues: { email: "" },
@@ -34,7 +47,7 @@ export default function ForgotPassword() {
     toast.promise(
       (async () => {
         const ok = await trigger("email");
-        if (!ok) throw new Error("Revisa el correo antes de continuar.");
+        if (!ok) throw new Error(errors.email?.message || "Revisa el correo.");
         const v = getValues();
         await mut.mutateAsync(v);
         setShowMark(true);
@@ -44,11 +57,14 @@ export default function ForgotPassword() {
         id: "forgot",
         loading: "Enviando enlace...",
         success: "Si el correo existe, se envió un enlace de restablecimiento.",
-        error: (e: any) => e?.message ?? e?.response?.data?.message ?? "No se pudo enviar el enlace",
+        error: (e: any) => {
+          if (e instanceof ApiError) return e.message;
+          return e?.response?.data?.message ?? e?.message ?? "No se pudo enviar el enlace";
+        },
       }
     );
 
-  /* UI original intacta a partir de aquí */
+  // ======== UI (sin cambios de diseño) ========
   const board = { w: 420, h: 420 };
 
   return (
@@ -120,7 +136,9 @@ export default function ForgotPassword() {
                     autoComplete="email"
                     aria-invalid={!!errors.email}
                   />
-                  {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email.message}</p>}
+                  {errors.email && (
+                    <p className="text-red-600 text-sm mt-1">{errors.email.message}</p>
+                  )}
                 </div>
 
                 <div className="mt-6 flex items-center gap-3">
