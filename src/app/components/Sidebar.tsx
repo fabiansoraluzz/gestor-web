@@ -19,8 +19,8 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: Squares2X2Icon },
+  { to: "/inventario", label: "Inventario", icon: CubeIcon },
   { to: "/clients", label: "Clientes", icon: UsersIcon },
-  { to: "/products", label: "Productos", icon: CubeIcon },
   { to: "/notifications", label: "Notificaciones", icon: BellIcon },
   { to: "/settings", label: "Configuración", icon: Cog6ToothIcon },
 ];
