@@ -26,12 +26,17 @@ export default function ProductoNuevoModal({
   const [strMedida, setMedida] = React.useState("");
   const [strColor, setColor] = React.useState("");
   const [strNotas, setNotas] = React.useState("");
+  const [decCantidad, setCantidad] = React.useState<string>(""); // ← NUEVO
+
+  // unidad corta (kg/dz) para mostrar en el sufijo de Cantidad
+  const unidadCorta = React.useMemo(() => {
+    const u = unidades.find((x) => x.id === intUnidadId)?.nombre?.toLowerCase() ?? "";
+    return u; // 'kg' | 'dz' | ''
+  }, [intUnidadId, unidades]);
 
   const nombreAuto = React.useMemo(() => {
     const cat = categorias.find((c) => c.id === intCategoriaId)?.nombre ?? "";
-    const partes = [cat, strVariante, strMedida, strColor].map((p) =>
-      (p || "").trim()
-    );
+    const partes = [cat, strVariante, strMedida, strColor].map((p) => (p || "").trim());
     return partes.filter(Boolean).join(" ").replace(/\s+/g, " ");
   }, [intCategoriaId, strVariante, strMedida, strColor, categorias]);
 
@@ -51,9 +56,7 @@ export default function ProductoNuevoModal({
         <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl border border-slate-200">
           {/* Header */}
           <div className="px-6 pt-6">
-            <h3 className="text-[22px] font-semibold text-slate-900">
-              Nuevo producto
-            </h3>
+            <h3 className="text-[22px] font-semibold text-slate-900">Nuevo producto</h3>
 
             {/* Zona de imagen + texto */}
             <div className="mt-4 flex items-center justify-center gap-6">
@@ -62,9 +65,7 @@ export default function ProductoNuevoModal({
               </div>
 
               <div className="flex flex-col items-center text-slate-600 text-sm">
-                <div className="leading-5 text-center">
-                  Arrastra una imagen aquí
-                </div>
+                <div className="leading-5 text-center">Arrastra una imagen aquí</div>
                 <div className="text-slate-400 my-0.5">o</div>
                 <button
                   type="button"
@@ -78,7 +79,7 @@ export default function ProductoNuevoModal({
 
           {/* Formulario */}
           <div className="px-6 pb-6 mt-4">
-            {/* ✅ Responsive: 80px 1fr en mobile; 160px 1fr en md+ */}
+            {/* Responsive: 80px 1fr (sm) ; 135px 1fr (md+) */}
             <div className="grid grid-cols-[80px_1fr] md:grid-cols-[135px_1fr] gap-x-4 gap-y-3 items-start">
               {/* Nombre (autogenerado) */}
               <label className="text-slate-700 text-sm">Nombre</label>
@@ -95,10 +96,7 @@ export default function ProductoNuevoModal({
                 value={intCategoriaId}
                 onChange={(v) => setCategoria(v as number | "")}
                 placeholder="Selecciona una categoría"
-                options={categorias.map((c) => ({
-                  value: c.id,
-                  label: c.nombre,
-                }))}
+                options={categorias.map((c) => ({ value: c.id, label: c.nombre }))}
               />
 
               {/* Unidad */}
@@ -107,11 +105,27 @@ export default function ProductoNuevoModal({
                 value={intUnidadId}
                 onChange={(v) => setUnidad(v as number | "")}
                 placeholder="Selecciona la unidad"
-                options={unidades.map((u) => ({
-                  value: u.id,
-                  label: u.nombre,
-                }))}
+                options={unidades.map((u) => ({ value: u.id, label: u.nombre }))}
               />
+
+              {/* Cantidad (NUEVO) */}
+              <label className="text-slate-700 text-sm">Cantidad</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.001"
+                  value={decCantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                  placeholder="Ej.: 12"
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-3 pr-12 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+                {/* sufijo de unidad */}
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 uppercase">
+                  {unidadCorta || "—"}
+                </span>
+              </div>
 
               {/* Variante */}
               <label className="text-slate-700 text-sm">Variante</label>
