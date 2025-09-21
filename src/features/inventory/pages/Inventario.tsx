@@ -196,13 +196,13 @@ export default function Inventario() {
           <table className="min-w-full text-sm table-fixed">
             {/* Anchos homogéneos por columna para distancias uniformes */}
             <colgroup>
-              <col className="w-[28rem]" /> {/* Producto (Nombre + SKU) */}
-              <col className="w-36" />      {/* Categoría */}
-              <col className="w-36" />      {/* Medida */}
-              <col className="w-36" />      {/* Color */}
-              <col className="w-36" />      {/* Stock */}
-              <col className="w-36" />      {/* Estado */}
-              <col className="w-40" />      {/* Acciones */}
+              <col className="w-[28rem]" />
+              <col className="w-36" />
+              <col className="w-36" />
+              <col className="w-36" />
+              <col className="w-36" />
+              <col className="w-36" />
+              <col className="w-40" />
             </colgroup>
 
             <thead className="bg-slate-50 text-slate-600">

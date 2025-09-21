@@ -171,7 +171,7 @@ export default function Login() {
                 <span className="text-sm text-slate-700">Mantener sesión activa</span>
               </label>
 
-              <Link to="/auth/forgot" className="text-sm text-rose-600 hover:underline">
+              <Link to="/auth/forgot" className="text-sm text-rose-600 hover:underline md:text-left text-end">
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
